@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>세출합본예산서 변환기</title>
+<style>
+:root{--bg:#f2f3f5;--card:#fff;--ink:#1f2933;--mute:#667085;--line:#d9dde3;--g:#2e7d32;--o:#e8710a;--b:#1a73e8;--blue-row:#ddebf7;--org-row:#ffe699}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "맑은 고딕","Malgun Gothic",system-ui,sans-serif}
+header{padding:20px 16px 8px;max-width:1180px;margin:0 auto}
+h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;color:var(--mute)}
+main{max-width:1180px;margin:0 auto;padding:8px 16px 40px;display:grid;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-top:4px solid var(--g)}
+.card.o{border-top-color:var(--o)}.card.b{border-top-color:var(--b)}
+.card h2{margin:0 0 8px;font-size:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+label{display:block;font-size:12px;color:var(--mute);margin-bottom:2px}
+input[type=text],select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;background:#fff}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:150px}
+textarea{width:100%;height:120px;border:1px dashed #9aa4b2;border-radius:8px;padding:8px;font:12px/1.4 Consolas,monospace;resize:vertical;white-space:pre;overflow:auto}
+textarea.drag{background:#eef6ff;border-color:var(--b)}
+button{font:inherit;padding:7px 14px;border-radius:7px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button:hover{background:#f6f7f9}
+button.main{background:var(--g);border-color:var(--g);color:#fff;font-weight:700}
+button.main:hover{background:#27692b}
+button.o{background:var(--o);border-color:var(--o)}button.o:hover{background:#c85f06}
+button.dl{background:var(--b);border-color:var(--b);color:#fff;font-weight:700}
+button:disabled{opacity:.45;cursor:not-allowed}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.st{color:var(--mute);font-size:12px}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid var(--line);padding:3px 6px;font-size:12px;text-align:left}
+th{background:#eceff3;position:sticky;top:0}
+td.n{text-align:right}
+.dept td{padding:0}.dept input{border:0;border-radius:0;padding:5px 6px;width:100%}
+.msgs{margin:8px 0 0;padding:0;list-style:none}
+.msgs li{padding:3px 0 3px 22px;position:relative}
+.msgs li:before{content:"•";position:absolute;left:8px}
+.msgs .ok:before{content:"✔";color:var(--g);left:4px}.msgs .warn{color:#b45309}.msgs .warn:before{content:"!";color:#b45309;left:8px;font-weight:700}.msgs .bad{color:#b42318;font-weight:700}
+.prev{max-height:360px;overflow:auto;border:1px solid var(--line);margin-top:8px}
+#prev td:nth-child(2){white-space:nowrap}
+tr.f1 td.u{background:var(--org-row)}tr.f2 td{background:var(--blue-row)}
+.hint{font-size:12px;color:var(--mute)}
+details summary{cursor:pointer;font-weight:700}
+.mini{padding:2px 8px;font-size:12px}
+#err{display:none;background:#fdecea;color:#b42318;border:1px solid #f4b4ae;border-radius:8px;padding:8px 12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>세출합본예산서 변환기</h1>
+  <p>엑셀에서 복사해 붙여넣거나 파일을 올리면, 세출합본예산서 서식의 엑셀 파일로 내려받을 수 있습니다. 모든 처리는 이 브라우저 안에서만 이루어지며 자료가 서버로 전송되지 않습니다.</p>
+</header>
+<main>
+  <div id="err"></div>
+
+  <section class="card b">
+    <h2>설정</h2>
+    <div class="row">
+      <div><label>예산확정일자 (원본에 없는 값, 비우면 빈칸)</label><input type="text" id="cfm" placeholder="예) 20261212"></div>
+      <div><label>예산구분 (비우면 제목에서 자동 판별)</label><input type="text" id="gub" placeholder="본예산 / 추경1회 / 추경2회 ..."></div>
+      <div><label>삭제된 기정 줄 추가 (②를 함께 넣었을 때)</label><select id="addx"><option value="예">예 (2026에만 있던 줄을 예산액 0원으로 추가)</option><option value="아니오">아니오</option></select></div>
+    </div>
+    <details style="margin-top:10px" id="deptbox">
+      <summary>부서 정보표 (요구서의 부서명으로 부서코드·위원회·회계를 채움)</summary>
+      <table class="dept" id="dept" style="margin-top:6px"><thead><tr><th>부서명</th><th>부서코드</th><th>위원회명</th><th>회계코드</th><th>회계명</th><th style="width:40px"></th></tr></thead><tbody></tbody></table>
+      <div class="bar"><button class="mini" id="addDept">+ 부서 추가</button><span class="st">이 브라우저에 자동 저장됩니다. ②번 전체자료 변환에는 쓰이지 않습니다.</span></div>
+    </details>
+  </section>
+
+  <div class="grid2">
+    <section class="card" id="p1">
+      <h2>① 예산요구서 (report) → 합본예산서</h2>
+      <textarea id="t1" spellcheck="false" placeholder="요구서 엑셀의 전체(Ctrl+A)를 복사해 여기에 붙여넣기 (Ctrl+V)&#10;또는 .xls/.xlsx 파일을 여기로 끌어다 놓기"></textarea>
+      <div class="bar"><input type="file" id="f1" accept=".xls,.xlsx,.csv,.txt" hidden><button id="b1f">파일 선택</button><button id="c1">지우기</button><span class="st" id="s1">입력 없음</span></div>
+      <div class="bar"><button class="main" id="go1">① 변환</button><span class="hint">②에 2026 전체자료를 같이 넣으면 기정액을 줄별로 정확히 맞춥니다.</span></div>
+    </section>
+    <section class="card o" id="p2">
+      <h2>② 예산 전체자료 (제목 2줄 + 자료, 약 70열) → 합본예산서</h2>
+      <textarea id="t3" spellcheck="false" placeholder="전체자료 엑셀을 제목 2줄 포함해 전체 복사해 붙여넣기 (Ctrl+V)&#10;또는 .xlsx 파일을 여기로 끌어다 놓기"></textarea>
+      <div class="bar"><input type="file" id="f3" accept=".xls,.xlsx,.csv,.txt" hidden><button id="b3f">파일 선택</button><button id="c3">지우기</button><span class="st" id="s3">입력 없음</span></div>
+      <div class="bar"><button class="main o" id="go3">② 변환</button><span class="hint">①의 기정액 확인용 2026 본예산 자료로도 쓰입니다.</span></div>
+    </section>
+  </div>
+
+  <section class="card" id="res" style="display:none">
+    <h2 id="rt">변환 결과</h2>
+    <ul class="msgs" id="msgs"></ul>
+    <div class="bar"><button class="dl" id="dl">엑셀 파일 내려받기 (.xlsx)</button><button id="addMiss" style="display:none">표에 없는 부서를 정보표에 추가</button><span class="st" id="info"></span></div>
+    <div class="prev"><table id="prev"></table></div>
+    <p class="hint">파란 줄 = 2026에만 있던 줄(예산액 0원) · 주황 칸 = 2026 자료로 확인되지 않아 통계목 기정액을 첫 줄에 합쳐 넣은 칸. 미리보기는 일부 열만 보여주며, 내려받은 파일에는 32열이 모두 들어 있습니다.</p>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="template.js"></script>
+<script src="converter.js"></script>
+<script>
+(function(){
+var $=function(id){return document.getElementById(id)};
+var G={1:null,3:null}, last=null;
+var DEF=[{name:'가족행복과',code:'1005060',com:'총무위원회',acc:'100',accNm:'일반회계'}];
+function err(m){var e=$('err');e.style.display=m?'block':'none';e.textContent=m||''}
+function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+
+/* ---- 부서표 ---- */
+function drawDept(list){
+  var tb=$('dept').tBodies[0];tb.innerHTML='';
+  list.forEach(function(d){addDeptRow(d)});
+}
+function addDeptRow(d){
+  var tr=document.createElement('tr');
+  ['name','code','com','acc','accNm'].forEach(function(k){var td=document.createElement('td');var i=document.createElement('input');i.type='text';i.value=d?d[k]||'':'';i.dataset.k=k;i.addEventListener('input',saveDept);td.appendChild(i);tr.appendChild(td)});
+  var td=document.createElement('td');var x=document.createElement('button');x.textContent='×';x.className='mini';x.onclick=function(){tr.remove();saveDept()};td.appendChild(x);tr.appendChild(td);
+  $('dept').tBodies[0].appendChild(tr);return tr;
+}
+function readDept(){
+  return Array.prototype.map.call($('dept').tBodies[0].rows,function(tr){var o={};Array.prototype.forEach.call(tr.querySelectorAll('input'),function(i){o[i.dataset.k]=i.value});return o}).filter(function(o){return o.name&&o.name.trim()});
+}
+function saveDept(){store('bc_dept',JSON.stringify(readDept()))}
+(function(){var s=store('bc_dept'),l=DEF;try{if(s){var p=JSON.parse(s);if(p&&p.length)l=p}}catch(e){}drawDept(l);
+ ['cfm','gub'].forEach(function(id){var v=store('bc_'+id);if(v)$(id).value=v;$(id).addEventListener('input',function(){store('bc_'+id,$(id).value)})});})();
+$('addDept').onclick=function(){addDeptRow(null)};
+
+/* ---- 입력 ---- */
+function setGrid(n,grid,label){
+  G[n]=grid;var r=window.BudgetConv.lastRowOf(grid),c=window.BudgetConv.lastColOf(grid);
+  $('s'+n).textContent=label+' · '+r+'행 × '+c+'열';
+}
+function fromText(n){
+  var t=$('t'+n).value;
+  if(!t.trim()){G[n]=null;$('s'+n).textContent='입력 없음';return}
+  setGrid(n,window.BudgetConv.parseTSV(t),'붙여넣기');
+}
+function fromFile(n,file){
+  if(!file)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      if(typeof XLSX==='undefined')throw new Error('엑셀 읽기 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+      var wb=XLSX.read(new Uint8Array(rd.result),{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var g=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+      $('t'+n).value='';$('t'+n).placeholder='파일: '+file.name;
+      setGrid(n,g,file.name);err('');
+    }catch(e){err('파일을 읽지 못했습니다: '+e.message)}
+  };
+  rd.readAsArrayBuffer(file);
+}
+[1,3].forEach(function(n){
+  var t=$('t'+n),timer;
+  t.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(function(){fromText(n)},250)});
+  t.addEventListener('paste',function(){setTimeout(function(){fromText(n)},50)});
+  $('b'+n+'f').onclick=function(){$('f'+n).click()};
+  $('f'+n).onchange=function(){fromFile(n,this.files[0]);this.value=''};
+  $('c'+n).onclick=function(){t.value='';t.placeholder='';G[n]=null;$('s'+n).textContent='입력 없음'};
+  t.addEventListener('dragover',function(e){e.preventDefault();t.classList.add('drag')});
+  t.addEventListener('dragleave',function(){t.classList.remove('drag')});
+  t.addEventListener('drop',function(e){e.preventDefault();t.classList.remove('drag');var f=e.dataTransfer.files[0];if(f)fromFile(n,f)});
+});
+
+/* ---- 변환 ---- */
+function settings(){return{cfmDate:$('cfm').value,gubun:$('gub').value,addExtra:$('addx').value!=='아니오',depts:readDept()}}
+function run(n){
+  err('');
+  if(n===1)fromText(1);else fromText(3);
+  if(n===1)fromText(3);
+  var out;
+  try{
+    if(n===1){
+      if(!G[1]){err('①에 예산요구서를 붙여넣거나 파일을 올려 주세요.');return}
+      out=BudgetConv.convertReport(G[1],G[3],settings());
+    }else{
+      if(!G[3]){err('②에 전체자료를 붙여넣거나 파일을 올려 주세요.');return}
+      out=BudgetConv.convertFull(G[3]);
+    }
+  }catch(e){err('변환 중 오류가 발생했습니다: '+e.message);return}
+  if(out.error){err(out.error);$('res').style.display='none';return}
+  last=out;last.kind=n;show(out);
+}
+$('go1').onclick=function(){run(1)};$('go3').onclick=function(){run(3)};
+
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+function fmt(x){return typeof x==='number'?Math.round(x).toLocaleString('en-US'):''}
+function show(o){
+  $('res').style.display='block';
+  $('rt').textContent=o.title;
+  $('msgs').innerHTML=o.msg.map(function(m){return '<li class="'+m[0]+'">'+esc(m[1])+'</li>'}).join('');
+  $('addMiss').style.display=o.missing&&o.missing.length?'':'none';
+  var cols=[14,15,16,17,18,19,20,21,22,32],names=['부서명','세부사업명','통계목','통계목명','산출근거명','산출근거식','예산액','기정액','비교증감','보조구분'];
+  if(o.kind===1){cols.pop();names.pop()}
+  var h='<thead><tr><th>#</th>'+names.map(function(x){return '<th>'+x+'</th>'}).join('')+'</tr></thead><tbody>';
+  var lim=Math.min(o.rows.length,300);
+  for(var i=0;i<lim;i++){
+    var r=o.rows[i],f=o.flags[i];
+    h+='<tr class="'+(f===1?'f1':f===2?'f2':'')+'"><td>'+(i+1)+'</td>'+cols.map(function(c,k){var v=r[c-1];var num=c>=20&&c<=22;return '<td class="'+(num?'n':'')+(c===21?' u':'')+'">'+esc(num?fmt(v):v).replace(/^ +/,function(s){return '&nbsp;'.repeat(s.length)})+'</td>'}).join('')+'</tr>';
+  }
+  h+='</tbody>';$('prev').innerHTML=h;
+  $('info').textContent=o.rows.length>lim?('미리보기 '+lim+'행 / 전체 '+o.rows.length+'행'):('전체 '+o.rows.length+'행');
+  $('res').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('addMiss').onclick=function(){
+  if(!last||!last.missing)return;
+  var have=readDept().map(function(d){return d.name.trim()});
+  last.missing.forEach(function(m){if(have.indexOf(m)<0)addDeptRow({name:m})});
+  saveDept();$('deptbox').open=true;$('deptbox').scrollIntoView({behavior:'smooth'});
+  alert('부서 정보표에 부서명을 추가했습니다. 부서코드·위원회·회계를 채운 뒤 다시 변환하세요.');
+};
+$('dl').onclick=async function(){
+  if(!last)return;
+  try{
+    if(typeof ExcelJS==='undefined')throw new Error('엑셀 생성 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+    var bin=atob(window.TEMPLATE_B64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+    var buf=await BudgetConv.buildWorkbook(ExcelJS,u.buffer,last);
+    var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=last.title.replace(/[\\/:*?"<>|]/g,'_')+'.xlsx';
+    document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1000);
+  }catch(e){err('파일을 만들지 못했습니다: '+e.message)}
+};
+})();
+</script>
+</body>
+</html>
